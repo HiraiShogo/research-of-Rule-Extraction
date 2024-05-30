@@ -2,6 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/24_5/XAI説明可能なAI/XAI-prg_210610/pytorch-grad-cam" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/24_5/XAI説明可能なAI/実験/pytorch-grad-cam" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/test/saliency" vcs="Git" />
   </component>
 </project>
