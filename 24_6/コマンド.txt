@@ -1,0 +1,7 @@
+[git]
+cd C:/Users/daisa/プログラミング/Python/2024/3/SAVEFIT/SAVEFIT
+git add .
+git commit -m ""
+git remote add origin https://github.com/som512/sotuken.git
+git branch -M main
+git push -u origin main
