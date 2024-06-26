@@ -13,6 +13,34 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("使用デバイス:", device)
 
 
+def get_label(labels):
+    # Tensor型の(-1,1)の配列　→　Tensor型(-1,10)の配列で返す
+    # 出力結果配列
+    labels_arr = np.array([])
+
+    # Tensor型をndarrayに変換。各データの10要素からなる配列を最大値のindexに置き換える。
+    for label in labels:
+        # Tensor型　→　ndarray型
+        label = label.to(torch.device('cpu'))
+        label = label.detach().clone().numpy()
+
+        # 配列の最大値のindexに置き換える。
+        label_arr = np.zeros(10)
+        np.put(label_arr, label, 1)
+
+        # labelsに結果を格納する
+        labels_arr = np.append(labels_arr, label_arr)
+    # ndarray型１次元ベクトル(-1)から２次元ベクトル(-1,10)に変換
+    labels_arr = labels_arr.reshape(-1,10)
+
+    # ndarray型　→ Tensor型
+    labels_arr = torch.from_numpy(labels_arr)
+
+    # デバイス情報がGPUだった場合、Tensor型にGPU情報を入れる
+    if device != "cpu":
+        labels_arr = labels_arr.to(torch.device('cuda:0'))
+    return labels_arr
+
 def get_model_weight(f_name, model, train_data, test_data, device, optim_sgd, epochs):
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -23,31 +51,45 @@ def get_model_weight(f_name, model, train_data, test_data, device, optim_sgd, ep
 
     for epoch in range(epochs):
         print('epoch', epoch + 1)
+
+        sum_train_loss = 0.0
+        sum_train_correct = 0
+        sum_train_total = 0
+
         for (inputs, labels) in train_data:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            labels_arr = get_label(labels)
+            loss = criterion(outputs, labels_arr)
             loss.backward()
             optimizer.step()
+            sum_train_loss += loss.item()
+            _, predicted = outputs.max(1)
+            sum_train_total += labels.size(0)
+            sum_train_correct += (predicted == labels).sum().item()
+        print(
+            "train loss={},accuracy={}".format(sum_train_loss * 100 / len(train_data.dataset),
+                                              float(sum_train_correct / sum_train_total)))
 
-        sum_loss = 0.0
-        sum_correct = 0
-        sum_total = 0
+        sum_test_loss = 0.0
+        sum_test_correct = 0
+        sum_test_total = 0
 
         for (inputs, labels) in test_data:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            sum_loss += loss.item()
+            labels_arr = get_label(labels)
+            loss = criterion(outputs, labels_arr)
+            sum_test_loss += loss.item()
             _, predicted = outputs.max(1)
-            sum_total += labels.size(0)
-            sum_correct += (predicted == labels).sum().item()
+            sum_test_total += labels.size(0)
+            sum_test_correct += (predicted == labels).sum().item()
         print(
-            "test loss={},accuracy={}".format(sum_loss * 100 / len(test_data.dataset), float(sum_correct / sum_total)))
+            "test loss={},accuracy={}".format(sum_test_loss * 100 / len(test_data.dataset), float(sum_test_correct / sum_test_total)))
 
-    return model, float(sum_correct / sum_total)
+    return model, float(sum_test_correct / sum_test_total)
 
 
 from torchvision.models.feature_extraction import create_feature_extractor
@@ -149,11 +191,14 @@ data_ = train_data
 for (inputs, labels) in data_:
     if i%1000 == 0:
         print(i)
+
     inputs = inputs[0].view(1, 1, 28, 28).to(device)
-    fd = hidden_feature(model, inputs, "rnn1")
+    fd = hidden_feature(model, inputs, "fc1")
 
     #h_x = fd["feature"]
-    h_x = fd["rnn1"][0]
+    h_x = fd["fc1"]
+    if i == 100:
+        print(h_x.size())
     h_x = h_x.view(h_x.size()[0], -1)
     # print(model.x_)
     # print(h_x.shape)
@@ -165,6 +210,7 @@ for (inputs, labels) in data_:
 
     # h_logic['label'+str(labels)].append(np.where(h_x>=0,True,False)[0])
     h_logic['label' + str(labels)].append(np.where(h_x >= hx_a, True, False)[0])
+
 
     i += 1
 
@@ -291,9 +337,9 @@ for (inputs, labels) in data_:
     if i%1000 == 0:
         print(i)
     inputs = inputs[0].view(1, 1, 28, 28).to(device)
-    fd = hidden_feature(model, inputs, "rnn1")
+    fd = hidden_feature(model, inputs, "fc1")
     #h_x = fd["feature"]
-    h_x = fd["rnn1"][0]
+    h_x = fd["fc1"]
     h_x = h_x.view(h_x.size()[0], -1)
 
     h_x = h_x.to('cpu').detach().numpy().copy()
@@ -312,6 +358,8 @@ un_exi_sum = 0
 
 for i in range(10):
     logics_sub = list(train_logics_['label' + str(i)].copy())
+    print(len(logics_sub))
+    print(len(test_logics))
     cor_ = 0
     un_exi = 0
     if logics_sub != []:

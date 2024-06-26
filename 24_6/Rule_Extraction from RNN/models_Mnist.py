@@ -35,9 +35,9 @@ class RNN2(nn.Module):
         self.rnn1 = nn.RNN(input_size=self.feature_size,
                                  hidden_size=self.hidden_layer_size,
                                  num_layers=self.rnn_layers)
-        self.fc1 = nn.Linear(self.hidden_layer_size,10)
+        self.fc1 = nn.Linear(self.hidden_layer_size,16)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(10,10)
+        self.fc2 = nn.Linear(16,10)
 
     def init_hidden(self, batch_size):  # RNNの隠れ層 hidden を初期化
         #hedden = torch.randn(self.rnn_layers, batch_size, self.hidden_layer_size)
@@ -56,10 +56,9 @@ class RNN2(nn.Module):
         x = x.permute(1, 0, 2)  # (Batch, Seqence, Feature) -> (Seqence , Batch, Feature)
 
         rnn_out, h_n = self.rnn1(x)  # RNNの入力データのShapeは(Seqence, Batch, Feature)
-        # (h_n) のShapeは (num_layers, batch, hidden_size)
-        x = h_n[-1, :, :]
+        #x = rnn_out
+        x = rnn_out[-1, :, :]  # RNN_layersの最後のレイヤーを取り出す (l, B, h)-> (B, h)
 
-        x = x.view(x.size()[0], -1)
 
         x = self.fc1(x)
         x = self.relu1(x)
