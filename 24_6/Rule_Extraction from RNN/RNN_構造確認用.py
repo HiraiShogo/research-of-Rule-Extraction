@@ -10,8 +10,8 @@ class SimpleRNN(nn.Module):
         self.rnn_out = nn.Linear(hidden_size, output_size)
         self.fc = nn.Linear(sequence, output_size)
 
-    def forward(self, x, h):
-        h_out, h = self.rnn(x, h)
+    def forward(self, x):
+        h_out, h = self.rnn(x)
         out = self.rnn_out(h_out)
         y = self.fc(torch.permute(out, (0,2,1)))
         return h_out, h, out, y
@@ -30,10 +30,10 @@ model = SimpleRNN(input_size, hidden_size, output_size, sequence)
 
 # ダミー入力データの生成
 input_data = torch.randn(batch_size, sequence, input_size)  # (バッチサイズ, シーケンス長, 入力の次元)
-hidden_state = model.init_hidden(batch_size)
+#hidden_state = model.init_hidden(batch_size)
 
 # フォワードパスを実行して全ての中間状態を取得
-h_out, hidden_state, out, y = model(input_data, hidden_state)
+h_out, hidden_state, out, y = model(input_data)
 
 # 全ての中間状態の表示
 print("入力 : ", input_data.size())

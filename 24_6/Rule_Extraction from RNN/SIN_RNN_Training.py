@@ -15,17 +15,15 @@ from callbacks import EarlyStopping
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, sequence):
         super().__init__()
-        self.l1 = nn.RNN(1, hidden_dim,
-                         nonlinearity='tanh',
-                         batch_first=True)
-        self.l2 = nn.Linear(hidden_dim, 1)
+        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.rnn_out = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(sequence, output_size)
 
-        nn.init.xavier_normal_(self.l1.weight_ih_l0)
-        nn.init.orthogonal_(self.l1.weight_hh_l0)
 
     def forward(self, x):
-        h, _ = self.l1(x)
-        y = self.l2(h[:, -1])
+        h_out, h = self.rnn(x)
+        out = self.rnn_out(h_out)
+        y = self.fc(torch.permute(out, (0,2,1)))
         return y
 
 
@@ -78,12 +76,77 @@ if __name__ == '__main__':
     '''
     3. モデルの学習
     '''
-    # モデルのロード
+    criterion = nn.MSELoss(reduction='mean')
+    optimizer = optimizers.Adam(model.parameters(),
+                                lr=0.001,
+                                betas=(0.9, 0.999), amsgrad=True)
+
+    def compute_loss(t, y):
+        return criterion(y, t)
+
+    def train_step(x, t):
+        x = torch.Tensor(x).to(device)
+        t = torch.Tensor(t).to(device)
+        model.train()
+        preds = model(x)
+        loss = compute_loss(t, preds)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        return loss, preds
+
+    def val_step(x, t):
+        x = torch.Tensor(x).to(device)
+        t = torch.Tensor(t).to(device)
+        model.eval()
+        preds = model(x)
+        loss = criterion(preds, t)
+
+        return loss, preds
+
+    epochs = 1000
+    batch_size = 100
+    n_batches_train = x_train.shape[0] // batch_size + 1
+    n_batches_val = x_val.shape[0] // batch_size + 1
+    hist = {'loss': [], 'val_loss': []}
+    es = EarlyStopping(patience=10, verbose=1)
+
+    for epoch in range(epochs):
+        train_loss = 0.
+        val_loss = 0.
+        x_, t_ = shuffle(x_train, t_train)
+
+        for batch in range(n_batches_train):
+            start = batch * batch_size
+            end = start + batch_size
+            loss, _ = train_step(x_[start:end], t_[start:end])
+            train_loss += loss.item()
+
+        for batch in range(n_batches_val):
+            start = batch * batch_size
+            end = start + batch_size
+            loss, _ = val_step(x_val[start:end], t_val[start:end])
+            val_loss += loss.item()
+
+        train_loss /= n_batches_train
+        val_loss /= n_batches_val
+
+        hist['loss'].append(train_loss)
+        hist['val_loss'].append(val_loss)
+
+        print('epoch: {}, loss: {:.3}, val_loss: {:.3f}'.format(
+            epoch+1,
+            train_loss,
+            val_loss
+        ))
+
+        if es(val_loss):
+            break
+
+    # モデルの保存
     model_path = 'model/sin_rnn_model.pth'
-    loaded_model = RNN(input_size, hidden_size, output_size, sequence)
-    loaded_model.load_state_dict(torch.load(model_path))
-    loaded_model.eval()  # モデルを評価モードに設定
-    print(f'Model loaded from {model_path}')
+    torch.save(model.state_dict(), model_path)
 
     '''
     4. モデルの評価
@@ -94,6 +157,7 @@ if __name__ == '__main__':
     sin = toy_problem(T, ampl=0.)
     gen = [None for i in range(maxlen)]
 
+
     z = x[:1]
 
     for i in range(length_of_sequences - maxlen):
@@ -102,7 +166,8 @@ if __name__ == '__main__':
         z = np.append(z, preds)[1:]
         z = z.reshape(-1, maxlen, 1)
         gen.append(preds[0, 0])
-
+    print(type(gen))
+    print(gen)
     # 予測値を可視化
     fig = plt.figure()
     plt.rc('font', family='serif')
