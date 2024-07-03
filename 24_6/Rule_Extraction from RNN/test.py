@@ -1,84 +1,97 @@
-import numpy as np
 import torch
+import torchvision
+import torchvision.transforms as transforms
 import torch.nn as nn
-import matplotlib.pyplot as plt
-import sys
+import torch.optim as optim
 
-# 定数の設定
-seq_length = 20
-n_steps = 1000
-input_size = 1
-hidden_size = 50
-num_layers = 2
-output_size = 1
-num_epochs = 100
-learning_rate = 0.01
-
-# SIN波データの生成
-time_steps = np.linspace(0, np.pi * 2 * n_steps / 100, n_steps)
-print(time_steps)
-sys.exit()
-data = np.sin(time_steps)
-
-
-# データの前処理
-def create_inout_sequences(data, seq_length):
-    inout_seq = []
-    for i in range(len(data) - seq_length):
-        train_seq = data[i:i + seq_length]
-        train_label = data[i + seq_length]
-        inout_seq.append((train_seq, train_label))
-    return inout_seq
-
-
-train_sequences = create_inout_sequences(data, seq_length)
-
-
+# RNNモデルの定義
 class RNN(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(RNN, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        # 初期隠れ状態の初期化
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
+        # RNNの出力
         out, _ = self.rnn(x, h0)
+        # 最後のタイムステップの出力を使用して分類
         out = self.fc(out[:, -1, :])
         return out
 
+# デバイスの設定
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# モデル、ロス関数、最適化関数の設定
-model = RNN(input_size, hidden_size, num_layers, output_size)
-criterion = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+# ハイパーパラメータの設定
+sequence_length = 28
+input_size = 28
+hidden_size = 12
+num_layers = 1
+num_classes = 10
+batch_size = 100
+num_epochs = 10
 
-# トレーニング
+# MNISTデータセットのダウンロードおよびデータローダーの作成
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+trans=torchvision.transforms.Compose([torchvision.transforms.ToTensor(),torchvision.transforms.Normalize((0.5,),(0.5,))])
+
+train_data=torchvision.datasets.MNIST(root="mnist_data",train=True,download=True,transform=trans)
+train_loader=torch.utils.data.DataLoader(train_data,batch_size=100,shuffle=True,num_workers=0)
+
+test_data=torchvision.datasets.MNIST(root="mnist_data",train=False,download=True,transform=trans)
+test_loader=torch.utils.data.DataLoader(test_data,batch_size=100,shuffle=False,num_workers=0)
+
+test_data_ext=test_data[0][0].view(1,1,28,28)
+test_data_ext=test_data_ext.to(device)
+
+# モデルの初期化
+model = RNN(input_size, hidden_size, num_layers, num_classes).to(device)
+
+# 損失関数とオプティマイザの設定
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters())
+
+# トレーニングループ
+total_step = len(train_loader)
 for epoch in range(num_epochs):
-    for seq, labels in train_sequences:
-        seq = torch.FloatTensor(seq).view(-1, seq_length, input_size)
-        labels = torch.FloatTensor([labels])
+    for i, (images, labels) in enumerate(train_loader):
+        # 入力をReshapeして、(batch_size, sequence_length, input_size)の形にする
+        images = images.reshape(-1, sequence_length, input_size).to(device)
+        labels = labels.to(device)
 
-        outputs = model(seq)
-        optimizer.zero_grad()
+        # 順伝播
+        outputs = model(images)
         loss = criterion(outputs, labels)
+
+        # 逆伝播と最適化
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-    if (epoch + 1) % 10 == 0:
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+        if (i+1) % 100 == 0:
+            print(f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{total_step}], Loss: {loss.item():.4f}')
 
-# 予測
-test_inputs = data[:seq_length].tolist()
+# テストループ
 model.eval()
-for _ in range(n_steps - seq_length):
-    seq = torch.FloatTensor(test_inputs[-seq_length:]).view(-1, seq_length, input_size)
-    with torch.no_grad():
-        test_inputs.append(model(seq).item())
+with torch.no_grad():
+    correct = 0
+    total = 0
+    for images, labels in test_loader:
+        images = images.reshape(-1, sequence_length, input_size).to(device)
+        labels = labels.to(device)
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
 
-# 結果のプロット
-plt.plot(time_steps, data, label='Real Data')
-plt.plot(time_steps[seq_length:], test_inputs[seq_length:], label='Predicted Data')
-plt.legend()
-plt.show()
+    print(f'Test Accuracy of the model on the 10000 test images: {100 * correct / total:.2f}%')
+
+# モデルの保存
+torch.save(model.state_dict(), 'rnn_model.ckpt')
