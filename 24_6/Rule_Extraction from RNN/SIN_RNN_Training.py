@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optimizers
 from callbacks import EarlyStopping
 
+import sys
 
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, sequence):
@@ -25,6 +26,20 @@ class RNN(nn.Module):
         out = self.rnn_out(h_out)
         y = self.fc(torch.permute(out, (0,2,1)))
         return y
+
+class simpleRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, sequence):
+        super().__init__()
+        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.rnn_out = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(sequence, output_size)
+
+
+    def forward(self, x):
+        h_out, h = self.rnn(x)
+        out = self.rnn_out(h)
+        #y = self.fc(torch.permute(out, (0,2,1)))
+        return out
 
 
 if __name__ == '__main__':
@@ -44,7 +59,7 @@ if __name__ == '__main__':
                                          size=len(x))
         return sin(x) + noise
 
-    T = 500
+    T = 100
     f = toy_problem(T).astype(np.float32)
     length_of_sequences = len(f)
     step = 1
@@ -155,19 +170,13 @@ if __name__ == '__main__':
 
     # sin波の予測
     sin = toy_problem(T, ampl=0.)
-    gen = [None for i in range(maxlen)]
+    nan_array_shape = (maxlen)
+    gen = np.where(np.ones(nan_array_shape) == 1, np.nan, 100)
 
+    x = torch.Tensor(x).to(device)
+    preds = model(x).data.cpu().numpy().reshape(-1)
+    gen = np.concatenate((gen, preds))
 
-    z = x[:1]
-
-    for i in range(length_of_sequences - maxlen):
-        z_ = torch.Tensor(z[-1:]).to(device)
-        preds = model(z_).data.cpu().numpy()
-        z = np.append(z, preds)[1:]
-        z = z.reshape(-1, maxlen, 1)
-        gen.append(preds[0, 0])
-    print(type(gen))
-    print(gen)
     # 予測値を可視化
     fig = plt.figure()
     plt.rc('font', family='serif')
