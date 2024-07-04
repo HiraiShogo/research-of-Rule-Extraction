@@ -5,6 +5,6 @@ import sys
 a = np.ones((2)) * 2
 b = np.ones((3)) * 3
 c = np.concatenate((a, b))
-print(c)
+
 print(c.shape)
-print(c)
+
