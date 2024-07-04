@@ -7,4 +7,3 @@ b = np.ones((3)) * 3
 c = np.concatenate((a, b))
 
 print(c.shape)
-print(c)
