@@ -1,0 +1,5 @@
+Units = 10000
+  Å® input type = normal
+sigma = 0.1
+d = 0.004
+output_part = Pool2

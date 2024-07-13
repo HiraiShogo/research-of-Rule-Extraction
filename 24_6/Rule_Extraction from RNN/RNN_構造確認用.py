@@ -12,9 +12,11 @@ class SimpleRNN(nn.Module):
 
     def forward(self, x):
         h_out, h = self.rnn(x)
-        out = self.rnn_out(h_out)
-        y = self.fc(torch.permute(out, (0,2,1)))
-        return h_out, h, out, y
+        out1 = self.fc(torch.permute(h_out, (0, 2, 1)))
+        out2 = self.rnn_out(torch.permute(out1, (0, 2, 1)))
+
+        #y = self.fc(torch.permute(out, (0,2,1)))
+        return h_out, h, out1, out2
 
     def init_hidden(self, batch_size):
         return torch.zeros(1, batch_size, self.hidden_size)
@@ -42,3 +44,4 @@ print("hidden_stateのサイズ:", hidden_state.size())
 print("RNN出力 : ", out.size())
 print("全結合層出力 : ", y.size())
 
+print(h_out)

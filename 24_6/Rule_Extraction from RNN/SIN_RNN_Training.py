@@ -13,21 +13,25 @@ from callbacks import EarlyStopping
 
 import sys
 
+
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, sequence):
         super().__init__()
-        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
-        self.rnn_out = nn.Linear(hidden_size, output_size)
-        self.fc = nn.Linear(sequence, output_size)
+        self.l1 = nn.RNN(input_size, hidden_size,
+                         nonlinearity='tanh',
+                         batch_first=True)
+        self.l2 = nn.Linear(hidden_size, output_size)
 
+        nn.init.xavier_normal_(self.l1.weight_ih_l0)
+        nn.init.orthogonal_(self.l1.weight_hh_l0)
 
     def forward(self, x):
-        h_out, h = self.rnn(x)
-        out = self.rnn_out(h_out)
-        y = self.fc(torch.permute(out, (0,2,1)))
+        h, _ = self.l1(x)
+        y = self.l2(h[:, -1])
         return y
 
-class simpleRNN(nn.Module):
+
+class RNN2(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, sequence):
         super().__init__()
         self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
@@ -37,9 +41,12 @@ class simpleRNN(nn.Module):
 
     def forward(self, x):
         h_out, h = self.rnn(x)
-        out = self.rnn_out(h)
+        out1 = self.fc(torch.permute(h_out, (0, 2, 1)))
+        out2 = self.rnn_out(torch.permute(out1, (0, 2, 1)))
+
+
         #y = self.fc(torch.permute(out, (0,2,1)))
-        return out
+        return out2
 
 
 if __name__ == '__main__':
@@ -81,12 +88,11 @@ if __name__ == '__main__':
     '''
     2. モデルの構築
     '''
-    input_size = 1  # 入力数
-    hidden_size = 50  # 隠れ層の次元
-    output_size = 1  # 出力数
-    sequence = 25  # シーケンス数
-
-    model = RNN(input_size, hidden_size, output_size, sequence).to(device)
+    input_size = 1
+    hidden_size = 1
+    output_size = 1
+    sequence = maxlen
+    model = RNN(input_size=input_size, hidden_size=hidden_size, output_size=output_size, sequence=sequence).to(device)
 
     '''
     3. モデルの学習
